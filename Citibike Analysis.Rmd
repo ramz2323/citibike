@@ -1,0 +1,110 @@
+---
+title: "Citi Bike Analysis"
+output: html_document
+date: "2024-11-12"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+pacman::p_load(tidyverse, ggplot2, scales, data.table)
+options(scipen=999)
+```
+##Analyzing Two Years of Citibike Trips
+
+```{r data setup}
+
+citidf <- 
+    list.files(pattern = "\\.csv$") %>% 
+    map_df(~fread(.))
+
+#cleaning up column names
+citidf <- citidf %>%
+  rename(
+    member_type = member_casual
+  )
+
+citidf <- citidf %>%
+  select(-c("Unnamed: 0", "rideable_type_duplicate_column_name_1"))
+
+#Convert rideable type and member type to factor
+citidf$rideable_type <- factor(citidf$rideable_type)
+citidf$member_type <- factor(citidf$member_type)
+
+#Add column for trip lengths in minutes
+citidf$trip_len <- difftime(citidf$ended_at, citidf$started_at, units = "mins") %>%
+  as.double() %>%
+  round(digits = 2)
+
+citidf <- citidf %>%
+  filter(as.Date(started_at) > as.Date("2023-10-31"))
+
+summary(citidf)
+quantile(citidf$trip_len, probs = c(.01, .1, .25, .5, .75, .9, .99, 1))
+
+#reviewing and cleaning outliers
+citidf %>%
+  filter(trip_len == max(trip_len))
+
+citidf <- citidf %>%
+  filter(start_station_name != "" & end_station_name != "")
+
+#removing extreme values for trip lengths likely due to docking/bike issues
+#also removing trips that start and end at the same station because it doesn't provide info about the path taken
+citidf <- citidf %>%
+  filter((trip_len < 240 & trip_len > 1.5) & start_station_name != end_station_name)
+
+```
+
+
+```{r exploratory analysis}
+summary(citidf)
+
+citidf %>%
+  group_by(rideable_type) %>%
+  summarise(n = n()) %>%
+  mutate(prop = prop.table(n))
+
+citidf %>%
+  group_by(member_type) %>%
+  summarise(n = n()) %>%
+  mutate(prop = prop.table(n))
+
+citidf %>%
+  group_by(rideable_type, member_type) %>%
+  summarise(n = n()) %>%
+  ggplot(., aes(x = rideable_type, y = n, fill = member_type, label = n)) +
+    geom_col(position="stack", stat="identity") +
+    geom_text(aes(label = comma(n)), position = position_stack(vjust = 0.5)) +
+    scale_y_continuous(name = "Trip Count", labels = comma) +
+    scale_x_discrete(name = "Bike Type", 
+                     labels = c("classic_bike" = "Classic Bike", 
+                                "electric_bike" = "Electric Bike")) +
+    guides(fill=guide_legend(title="Rider Type")) +
+    labs(title = "Citibike Trip Counts by Bike and Rider Types",
+         subtitle = "11/2023 - 10/2024")
+
+citidf$started_date <- as.Date(citidf$started_at)
+
+citidf %>%
+  group_by(started_date) %>%
+  summarise(n = n()) %>%
+  ggplot(aes(x = started_date, y = n)) +
+  geom_line()
+
+citidf$day <- weekdays(citidf$started_date)
+citidf$day <- factor(citidf$day, levels = c('Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'))
+
+#citidf %>%
+  #group_by(started_date, day) %>%
+  #summarise(n = n()) %>% 
+  # ggplot(., aes(x = ))
+
+#ggplot(citidf, aes(x = trip_len)) +
+#  geom_histogram() 
+
+
+#65% of trips are on electric bikes
+```
+
+
