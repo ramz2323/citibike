@@ -1,0 +1,77 @@
+---
+title: "Citi Bike Analysis"
+output: html_document
+date: "2024-11-12"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+pacman::p_load(tidyverse, ggplot2, scales, data.table)
+options(scipen=999)
+```
+##Analyzing Two Years of Citibike Trips
+
+```{r data load}
+
+citidf <- 
+    list.files(pattern = "\\.csv$") %>% 
+    map_df(~fread(.))
+
+citidf <- citidf %>%
+  rename(
+    member_type = member_casual
+  )
+
+#Convert rideable type and member type to factor
+citidf$rideable_type <- factor(citidf$rideable_type)
+citidf$member_type <- factor(citidf$member_type)
+
+#Add column for trip lengths in minutes
+citidf$trip_len <- as.numeric(difftime(citidf$ended_at, citidf$started_at, units = "mins"))
+```
+
+
+```{r exploratory analysis}
+summary(citidf)
+
+citidf %>%
+  group_by(rideable_type) %>%
+  summarise(n = n()) %>%
+  mutate(prop = prop.table(n))
+
+citidf %>%
+  group_by(member_type) %>%
+  summarise(n = n()) %>%
+  mutate(prop = prop.table(n))
+
+citidf %>%
+  group_by(rideable_type, member_type) %>%
+  summarise(n = n()) %>%
+  ggplot(., aes(x = rideable_type, y = n, fill = member_type, label = n)) +
+    geom_col(position="stack", stat="identity") +
+    geom_text(aes(label = comma(n)), position = position_stack(vjust = 0.5)) +
+    scale_y_continuous(name = "Trip Count", labels = comma) +
+    scale_x_discrete(name = "Bike Type", 
+                     labels = c("classic_bike" = "Classic Bike", 
+                                "electric_bike" = "Electric Bike")) +
+    guides(fill=guide_legend(title="Rider Type")) +
+    labs(title = "Citibike Trip Counts by Bike and Rider Types",
+         subtitle = "11/2023 - 10/2024")
+
+
+citidf %>%
+  ggplot(., aes(y = trip_len)) =
+  geom_boxplot()
+
+
+
+citidf %>%
+  ggplot(., aes(x = trip_len)) +
+    geom_histogram() 
+
+
+#65% of trips are on electric bikes
+```
+
+
